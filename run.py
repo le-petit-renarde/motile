@@ -87,7 +87,7 @@ def run_simulation(config: SimConfig, num_ticks: int, save_every: int, output_di
             # Compute all pairwise Chebyshev distances max(|x1-x2|, |y1-y2|, |z1-z2|)
             diffs = np.abs(all_positions[:, None, :] - all_positions[None, :, :])
             chebyshev_dist = diffs.max(axis=2)
-            # Count neighbors strictly within distance 3 (subtract 1 for self)
+            # Count neighbors within Chebyshev distance 3 (subtract 1 for self)
             neighbor_counts = (chebyshev_dist <= 3).sum(axis=1) - 1
             neighbor_counts = np.maximum(0, neighbor_counts)
         

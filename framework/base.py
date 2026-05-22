@@ -6,9 +6,16 @@ class Brain:
     def forward(self, inputs: np.ndarray) -> np.ndarray:
         raise NotImplementedError
 
-    def mutate(self, mutation_rate: float, leap_prob: float, leap_multiplier: float) -> None:
+    def mutate(
+        self,
+        mutation_rate: float,
+        *,
+        mutation_prob: float = 0.3,
+        leap_prob: float = 0.01,
+        leap_multiplier: float = 3.0,
+    ) -> None:
         """Mutate the brain's parameters."""
-        pass
+        raise NotImplementedError
 
     def copy(self) -> 'Brain':
         """Return a copy of the brain."""

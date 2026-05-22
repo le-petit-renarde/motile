@@ -15,7 +15,7 @@ class GridEnvironment(Environment):
             raise ValueError("diffusion_rates and decay_rates must match num_channels")
 
         self.diffusion_rates = np.array(diffusion_rates, dtype=np.float32)
-        # Convert decay rates to exponential decay factors (1.0 - decay)
+        # Convert decay rates to per-tick linear decay multipliers (1.0 - decay)
         self.decay_factors = 1.0 - np.array(decay_rates, dtype=np.float32)
 
         # Grid: [channel, x, y, z]
@@ -114,4 +114,4 @@ class GridEnvironment(Environment):
         Child classes should override this to apply custom logic (like nutrient influx)
         and then call step_chemistry() with the appropriate emissions.
         """
-        pass
+        raise NotImplementedError

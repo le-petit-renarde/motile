@@ -76,7 +76,14 @@ class FeedForwardBrain(Brain):
             return x[0].astype(np.float32)
         return x.astype(np.float32)
 
-    def mutate(self, mutation_rate: float, mutation_prob: float = 0.3, leap_prob: float = 0.01, leap_multiplier: float = 3.0) -> None:
+    def mutate(
+        self,
+        mutation_rate: float,
+        *,
+        mutation_prob: float = 0.3,
+        leap_prob: float = 0.01,
+        leap_multiplier: float = 3.0,
+    ) -> None:
         """
         Mutate weights.
         - `mutation_prob`: fraction of weights to mutate standardly.
