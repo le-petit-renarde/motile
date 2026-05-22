@@ -80,16 +80,16 @@ def run_simulation(config: SimConfig, num_ticks: int, save_every: int, output_di
         # Precompute all grid positions for neighbor density
         all_positions = np.array([m.grid_pos() for m in motiles], dtype=int)
         n = len(all_positions)
-        # Vectorized pairwise Chebyshev distances via broadcasting
-        # For each motile, count neighbors within distance 3
+
+        # Vectorized pairwise Chebyshev distances
         neighbor_counts = np.zeros(n, dtype=int)
         if n > 0:
-            # Compute all-pairs Chebyshev distances using matrix ops
-            for dim in range(3):
-                diff = np.abs(all_positions[:, dim, None] - all_positions[None, :, dim])
-                neighbor_counts += (diff <= 3).sum(axis=1).astype(int)
-            neighbor_counts = neighbor_counts - 3  # subtract self-contribution (3 dims × 1 for self)
-            neighbor_counts = np.maximum(0, neighbor_counts)  # clamp
+            # Compute all pairwise Chebyshev distances max(|x1-x2|, |y1-y2|, |z1-z2|)
+            diffs = np.abs(all_positions[:, None, :] - all_positions[None, :, :])
+            chebyshev_dist = diffs.max(axis=2)
+            # Count neighbors within Chebyshev distance 3 (subtract 1 for self)
+            neighbor_counts = (chebyshev_dist <= 3).sum(axis=1) - 1
+            neighbor_counts = np.maximum(0, neighbor_counts)
         
         for i, m in enumerate(motiles):
             gp = all_positions[i]

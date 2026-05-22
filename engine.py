@@ -143,14 +143,11 @@ class SimulationEngine:
 
         # 4. Motile emissions --------------------------------------------------
         if motile_positions is not None and len(motile_positions) > 0:
+            x, y, z = motile_positions[:, 0], motile_positions[:, 1], motile_positions[:, 2]
             if motile_toxin_emit is not None and len(motile_toxin_emit) > 0:
-                self._scatter_add(
-                    self.grid[self.TOXIN], motile_positions, motile_toxin_emit
-                )
+                np.add.at(self.grid[self.TOXIN], (x, y, z), motile_toxin_emit)
             if motile_phage_emit is not None and len(motile_phage_emit) > 0:
-                self._scatter_add(
-                    self.grid[self.PHAGE], motile_positions, motile_phage_emit
-                )
+                np.add.at(self.grid[self.PHAGE], (x, y, z), motile_phage_emit)
 
         # 5. Clamp -------------------------------------------------------------
         np.clip(self.grid, 0.0, 1.0, out=self.grid)
@@ -246,21 +243,6 @@ class SimulationEngine:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _scatter_add(
-        field: np.ndarray,
-        positions: np.ndarray,
-        values: np.ndarray,
-    ) -> None:
-        """``np.add.at`` wrapper that broadcasts (M,3) positions to 3 index
-        arrays, working around the limitation that ``add.at`` requires
-        separate arrays per dimension."""
-        np.add.at(
-            field,
-            (positions[:, 0], positions[:, 1], positions[:, 2]),
-            values,
-        )
 
     def _diffuse(self, field: np.ndarray, rate: float) -> np.ndarray:
         """One tick of face‑neighbour diffusion on a 3D scalar field.
