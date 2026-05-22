@@ -78,37 +78,40 @@ def run_simulation(config: SimConfig, num_ticks: int, save_every: int, output_di
         inputs_list = []
         
         # Precompute all grid positions for neighbor density
-        all_positions = np.array([m.grid_pos() for m in motiles], dtype=int)
+        positions_float = np.array([m.position for m in motiles])
+        all_positions = np.maximum(0, np.minimum(config.grid_size - 1, np.rint(positions_float).astype(int)))
         n = len(all_positions)
         # Vectorized pairwise Chebyshev distances via broadcasting
         # For each motile, count neighbors within distance 3
-        neighbor_counts = np.zeros(n, dtype=int)
         if n > 0:
-            # Compute all-pairs Chebyshev distances using matrix ops
-            for dim in range(3):
-                diff = np.abs(all_positions[:, dim, None] - all_positions[None, :, dim])
-                neighbor_counts += (diff <= 3).sum(axis=1).astype(int)
-            neighbor_counts = neighbor_counts - 3  # subtract self-contribution (3 dims × 1 for self)
-            neighbor_counts = np.maximum(0, neighbor_counts)  # clamp
-        
-        for i, m in enumerate(motiles):
-            gp = all_positions[i]
-            neighbor_density = min(neighbor_counts[i] / 20.0, 1.0)
+            diffs_x = np.abs(all_positions[:, 0, None] - all_positions[None, :, 0]) <= 3
+            diffs_y = np.abs(all_positions[:, 1, None] - all_positions[None, :, 1]) <= 3
+            diffs_z = np.abs(all_positions[:, 2, None] - all_positions[None, :, 2]) <= 3
+            neighbor_counts = (diffs_x & diffs_y & diffs_z).sum(axis=1) - 1
+            neighbor_counts = np.maximum(0, neighbor_counts)
+        else:
+            neighbor_counts = np.zeros(n, dtype=int)
+
+        if n > 0:
+            nutrients, toxins, phages = engine.sample_at(all_positions)
+            grads = engine.gradient_at(all_positions, engine.NUTRIENT)
+            energies = np.array([m.energy for m in motiles])
+
+            neighbor_densities = np.maximum(0.0, np.minimum(1.0, neighbor_counts / 20.0))
+
+            grad_x = np.maximum(-1, np.minimum(1, grads[:, 0] * 5))
+            grad_y = np.maximum(-1, np.minimum(1, grads[:, 1] * 5))
+            grad_z = np.maximum(-1, np.minimum(1, grads[:, 2] * 5))
+            toxin_inp = np.maximum(-1, np.minimum(1, toxins * 2))
+            phage_inp = np.maximum(-1, np.minimum(1, phages * 2))
+            energy_inp = np.maximum(-1, np.minimum(1, energies / 100.0 - 0.5))
+            density_inp = np.maximum(-1, np.minimum(1, neighbor_densities * 2))
             
-            # Build input with actual neighbor density
-            nutrient, toxin, phage = engine.sample_at(gp.reshape(1, 3))
-            grad = engine.gradient_at(gp.reshape(1, 3), engine.NUTRIENT)
+            batch_inputs = np.column_stack([
+                grad_x, grad_y, grad_z, toxin_inp, phage_inp, energy_inp, density_inp
+            ]).astype(np.float32)
             
-            inp = np.array([
-                np.clip(grad[0, 0] * 5, -1, 1),
-                np.clip(grad[0, 1] * 5, -1, 1),
-                np.clip(grad[0, 2] * 5, -1, 1),
-                np.clip(toxin[0] * 2, -1, 1),
-                np.clip(phage[0] * 2, -1, 1),
-                np.clip(m.energy / 100.0 - 0.5, -1, 1),
-                np.clip(neighbor_density * 2, -1, 1),
-            ], dtype=np.float32)
-            inputs_list.append(inp)
+            inputs_list = list(batch_inputs)
         
         # Batch forward pass for efficiency
         if inputs_list:
@@ -128,8 +131,8 @@ def run_simulation(config: SimConfig, num_ticks: int, save_every: int, output_di
             above = positions_arr[:, dim] > config.grid_size - 1
             positions_arr[below, dim] = -positions_arr[below, dim] * 0.3
             positions_arr[above, dim] = 2 * (config.grid_size - 1) - positions_arr[above, dim]
-            positions_arr[above, dim] = np.clip(positions_arr[above, dim], 0, config.grid_size - 1)
-        positions_arr = np.clip(positions_arr, 0, config.grid_size - 1)
+            positions_arr[above, dim] = np.maximum(0, np.minimum(config.grid_size - 1, positions_arr[above, dim]))
+        positions_arr = np.maximum(0, np.minimum(config.grid_size - 1, positions_arr))
         
         for i, m in enumerate(motiles):
             m.position = positions_arr[i]
