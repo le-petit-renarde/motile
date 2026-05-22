@@ -93,7 +93,7 @@ def run_simulation(config: SimConfig, num_ticks: int, save_every: int, output_di
             neighbor_counts = np.zeros(n, dtype=int)
 
         if n > 0:
-            nutrients, toxins, phages = engine.sample_at(all_positions)
+            _nutrients, toxins, phages = engine.sample_at(all_positions)
             grads = engine.gradient_at(all_positions, engine.NUTRIENT)
             energies = np.array([m.energy for m in motiles])
 

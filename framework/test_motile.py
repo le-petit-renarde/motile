@@ -14,7 +14,10 @@ class TestMotile(unittest.TestCase):
         config = SimConfig()
         e = SimulationEngine(config)
         e.reset()
-        self.assertEqual(e.grid.shape, (3, 48, 48, 48))
+        self.assertEqual(
+            e.grid.shape,
+            (3, config.grid_size, config.grid_size, config.grid_size),
+        )
 
 if __name__ == '__main__':
     unittest.main()

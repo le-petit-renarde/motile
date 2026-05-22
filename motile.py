@@ -451,7 +451,7 @@ class Motile:
         # ---- position ----
         offset = np.random.randn(3).astype(np.float32) * np.float32(1.5)
         child_pos = self.position + offset
-        child_pos = np.maximum(0.0, np.minimum(float(cfg.grid_size - 1), child_pos))
+        np.clip(child_pos, 0.0, float(cfg.grid_size - 1), out=child_pos)
 
         return Motile(
             config=cfg,
