@@ -1,0 +1,23 @@
+# Motile — gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Simulation outputs (large)
+demo/
+demo_states/
+test_states/
+test_run/
+run_demo/
+states/
+states2/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

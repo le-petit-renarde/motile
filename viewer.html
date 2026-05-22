@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motile — 3D Viewer</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: rgba(10, 12, 20, 0.92);
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --green: #4ade80;
+            --red: #ef4444;
+            --blue: #60a5fa;
+            --accent: #38bdf8;
+            --glow-green: rgba(74, 222, 128, 0.35);
+            --glow-red: rgba(239, 68, 68, 0.45);
+            --glow-blue: rgba(96, 165, 250, 0.35);
+            --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            font-family: var(--font);
+            color: var(--text);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        /* ---- Drop Zone ---- */
+        #drop-zone {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.25s;
+        }
+        #drop-zone.active {
+            pointer-events: auto;
+            opacity: 1;
+        }
+        #drop-zone.idle {
+            opacity: 0;
+        }
+        #drop-zone .card {
+            background: var(--surface);
+            border: 2px dashed rgba(255, 255, 255, 0.18);
+            border-radius: 20px;
+            padding: 48px 64px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: all 0.3s;
+        }
+        #drop-zone.dragover .card {
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.08);
+            box-shadow: 0 0 80px rgba(56, 189, 248, 0.15);
+            transform: scale(1.03);
+        }
+        #drop-zone .card .icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+            opacity: 0.7;
+        }
+        #drop-zone .card h1 {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            margin-bottom: 8px;
+        }
+        #drop-zone .card p {
+            font-size: 14px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+        #drop-zone .card .browse-btn {
+            display: inline-block;
+            margin-top: 18px;
+            padding: 10px 28px;
+            background: var(--accent);
+            color: #0a0a0f;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: var(--font);
+        }
+        #drop-zone .card .browse-btn:hover {
+            background: #7dd3fc;
+            box-shadow: 0 0 24px rgba(56, 189, 248, 0.4);
+        }
+        #file-input { display: none; }
+
+        /* ---- HUD ---- */
+        #hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 20;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 20px;
+            min-width: 240px;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            font-size: 13px;
+            line-height: 1.7;
+            pointer-events: auto;
+        }
+        #hud .tick {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: var(--mono);
+            letter-spacing: -1px;
+            color: var(--accent);
+            margin-bottom: 4px;
+        }
+        #hud .label {
+            color: var(--text-dim);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+        #hud .stat-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        #hud .stat-val { font-family: var(--mono); font-weight: 500; }
+        #hud .stat-val.green { color: var(--green); }
+        #hud .stat-val.red { color: var(--red); }
+        #hud .stat-val.blue { color: var(--blue); }
+
+        #hud .controls {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #hud .controls button {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            color: var(--text);
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        #hud .controls button:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent);
+        }
+        #hud .controls button.active {
+            background: var(--accent);
+            color: #0a0a0f;
+            border-color: var(--accent);
+        }
+        #hud .speed-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-left: 4px;
+            font-family: var(--mono);
+            min-width: 32px;
+        }
+
+        /* ---- Stats Panel ---- */
+        #stats-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 20;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 20px;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            font-size: 12px;
+            line-height: 1.8;
+            min-width: 200px;
+            pointer-events: auto;
+        }
+        #stats-panel h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        #stats-panel .metric {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        #stats-panel .metric .key { color: var(--text-dim); }
+        #stats-panel .metric .val { font-family: var(--mono); font-weight: 500; }
+
+        /* ---- Timeline ---- */
+        #timeline {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px 20px;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            pointer-events: auto;
+        }
+        #timeline button {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            color: var(--text);
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            font-family: var(--font);
+        }
+        #timeline button:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent);
+        }
+        #timeline input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 200px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+        #timeline input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+        }
+        #timeline .tick-display {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--text-dim);
+            min-width: 70px;
+            text-align: center;
+        }
+
+        /* ---- Legend ---- */
+        #legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 20;
+            display: flex;
+            gap: 16px;
+            pointer-events: auto;
+        }
+        #legend .item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+        #legend .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        #legend .dot.green { background: var(--green); box-shadow: 0 0 8px var(--glow-green); }
+        #legend .dot.red { background: var(--red); box-shadow: 0 0 8px var(--glow-red); }
+        #legend .dot.blue { background: var(--blue); box-shadow: 0 0 8px var(--glow-blue); }
+
+        /* ---- Toast ---- */
+        #toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            background: var(--surface);
+            border: 1px solid var(--accent);
+            color: var(--text);
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-family: var(--font);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            backdrop-filter: blur(14px);
+        }
+        #toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <div id="drop-zone" class="active">
+        <div class="card">
+            <div class="icon">🧬</div>
+            <h1>Motile 3D Viewer</h1>
+            <p>
+                Drop <code>state_*.json</code> files here<br>
+                or drag a folder of snapshots
+            </p>
+            <button class="browse-btn" onclick="document.getElementById('file-input').click()">
+                Browse Files
+            </button>
+            <input type="file" id="file-input" multiple accept=".json" />
+        </div>
+    </div>
+
+    <div id="hud">
+        <div class="tick" id="hud-tick">—</div>
+        <div class="label">Tick</div>
+        <div style="margin-top:6px;">
+            <div class="stat-row"><span>Population</span><span class="stat-val" id="hud-pop">0</span></div>
+            <div class="stat-row"><span>Healthy</span><span class="stat-val green" id="hud-healthy">0</span></div>
+            <div class="stat-row"><span>Infected</span><span class="stat-val red" id="hud-infected">0</span></div>
+            <div class="stat-row"><span>Resistant</span><span class="stat-val blue" id="hud-resistant">0</span></div>
+            <div class="stat-row" style="margin-top:4px;"><span>Avg Resistance</span><span class="stat-val" id="hud-resist">—</span></div>
+            <div class="stat-row"><span>Generation</span><span class="stat-val" id="hud-gen">—</span></div>
+        </div>
+        <div class="controls">
+            <button id="btn-prev" title="Previous frame">⏮</button>
+            <button id="btn-play" title="Play/Pause">▶</button>
+            <button id="btn-next" title="Next frame">⏭</button>
+            <span class="speed-label" id="speed-label">1×</span>
+            <button id="btn-speed-down" title="Slower">−</button>
+            <button id="btn-speed-up" title="Faster">+</button>
+        </div>
+    </div>
+
+    <div id="stats-panel">
+        <h3>Simulation Metrics</h3>
+        <div id="stats-content">
+            <div class="metric"><span class="key">Avg Energy</span><span class="val" id="st-avg-energy">—</span></div>
+            <div class="metric"><span class="key">Avg Age</span><span class="val" id="st-avg-age">—</span></div>
+            <div class="metric"><span class="key">Max Generation</span><span class="val" id="st-max-gen">—</span></div>
+            <div class="metric"><span class="key">Avg Infectivity</span><span class="val" id="st-avg-inf">—</span></div>
+            <div class="metric"><span class="key">Nutrient Mean</span><span class="val" id="st-nutrient">—</span></div>
+            <div class="metric"><span class="key">Phage Mean</span><span class="val" id="st-phage">—</span></div>
+            <div class="metric"><span class="key">Infections/Tick</span><span class="val" id="st-infections">—</span></div>
+            <div class="metric"><span class="key">Recoveries/Tick</span><span class="val" id="st-recoveries">—</span></div>
+        </div>
+    </div>
+
+    <div id="timeline">
+        <button id="btn-tl-prev" title="Previous frame">⏮</button>
+        <input type="range" id="tl-scrubber" min="0" max="0" value="0" step="1" />
+        <button id="btn-tl-next" title="Next frame">⏭</button>
+        <span class="tick-display" id="tl-label">0 / 0</span>
+    </div>
+
+    <div id="legend">
+        <div class="item"><span class="dot green"></span> Healthy</div>
+        <div class="item"><span class="dot red"></span> Infected</div>
+        <div class="item"><span class="dot blue"></span> Resistant</div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // =========================================================================
+        // DOM References
+        // =========================================================================
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const toast = document.getElementById('toast');
+
+        const hudTick = document.getElementById('hud-tick');
+        const hudPop = document.getElementById('hud-pop');
+        const hudHealthy = document.getElementById('hud-healthy');
+        const hudInfected = document.getElementById('hud-infected');
+        const hudResistant = document.getElementById('hud-resistant');
+        const hudResist = document.getElementById('hud-resist');
+        const hudGen = document.getElementById('hud-gen');
+        const btnPlay = document.getElementById('btn-play');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnSpeedDown = document.getElementById('btn-speed-down');
+        const btnSpeedUp = document.getElementById('btn-speed-up');
+        const speedLabel = document.getElementById('speed-label');
+
+        const tlScrubber = document.getElementById('tl-scrubber');
+        const tlLabel = document.getElementById('tl-label');
+        const btnTlPrev = document.getElementById('btn-tl-prev');
+        const btnTlNext = document.getElementById('btn-tl-next');
+
+        // Stats panel elements
+        const stAvgEnergy = document.getElementById('st-avg-energy');
+        const stAvgAge = document.getElementById('st-avg-age');
+        const stMaxGen = document.getElementById('st-max-gen');
+        const stAvgInf = document.getElementById('st-avg-inf');
+        const stNutrient = document.getElementById('st-nutrient');
+        const stPhage = document.getElementById('st-phage');
+        const stInfections = document.getElementById('st-infections');
+        const stRecoveries = document.getElementById('st-recoveries');
+
+        // =========================================================================
+        // State
+        // =========================================================================
+        const states = [];          // array of parsed state objects, sorted by tick
+        let currentIndex = 0;
+        let isPlaying = false;
+        let playSpeed = 1;          // ticks per second multiplier
+        let lastFrameTime = 0;
+        let frameAccumulator = 0;
+        const BASE_TPS = 2;         // base ticks per second at speed 1
+
+        // =========================================================================
+        // Three.js Setup
+        // =========================================================================
+        const DEFAULT_GRID_SIZE = 20; // fallback grid size
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#0a0a0f');
+        scene.fog = new THREE.Fog('#0a0a0f', 30, 80);
+
+        const camera = new THREE.PerspectiveCamera(
+            50,
+            window.innerWidth / window.innerHeight,
+            0.5,
+            200
+        );
+        camera.position.set(28, 22, 32);
+        camera.lookAt(10, 10, 10);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.minDistance = 3;
+        controls.maxDistance = 80;
+        controls.target.set(10, 10, 10);
+        controls.update();
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight('#334466', 1.8);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight('#ffffff', 2.5);
+        keyLight.position.set(30, 40, 20);
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight('#4466aa', 1.2);
+        fillLight.position.set(-15, 5, -10);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight('#ff8866', 0.8);
+        rimLight.position.set(0, -2, 25);
+        scene.add(rimLight);
+
+        // Axes helper
+        const axesHelper = new THREE.AxesHelper(5);
+        axesHelper.position.set(0, 0, 0);
+        scene.add(axesHelper);
+
+        // Grid floor reference
+        const gridHelper = new THREE.PolarGridHelper(12, 24, 16, 64, '#1a1a2e', '#1a1a2e');
+        gridHelper.position.set(10, -0.05, 10);
+        scene.add(gridHelper);
+
+        // =========================================================================
+        // Bounding Box Wireframe
+        // =========================================================================
+        const boxGroup = new THREE.Group();
+        scene.add(boxGroup);
+
+        let currentGridSize = DEFAULT_GRID_SIZE;
+        let boxWireframe = null;
+        let boxEdges = null;
+
+        function updateBoundingBox(gridSize) {
+            // Remove old
+            if (boxWireframe) { boxGroup.remove(boxWireframe); boxWireframe.geometry?.dispose(); }
+            if (boxEdges) { boxGroup.remove(boxEdges); boxEdges.geometry?.dispose(); }
+
+            const sz = gridSize || DEFAULT_GRID_SIZE;
+            currentGridSize = sz;
+            const geo = new THREE.BoxGeometry(sz, sz, sz);
+            const mat = new THREE.MeshBasicMaterial({ color: '#ffffff', wireframe: true, transparent: true, opacity: 0.12 });
+            boxWireframe = new THREE.Mesh(geo, mat);
+            boxWireframe.position.set(sz / 2, sz / 2, sz / 2);
+            boxGroup.add(boxWireframe);
+
+            // Edge lines for a cleaner look
+            const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(sz, sz, sz));
+            const edgeMat = new THREE.LineBasicMaterial({ color: '#334466', transparent: true, opacity: 0.5 });
+            boxEdges = new THREE.LineSegments(edgeGeo, edgeMat);
+            boxEdges.position.set(sz / 2, sz / 2, sz / 2);
+            boxGroup.add(boxEdges);
+
+            // Corner dots
+            const dotGeo = new THREE.SphereGeometry(0.18, 8, 8);
+            const dotMat = new THREE.MeshBasicMaterial({ color: '#6688aa' });
+            const corners = [
+                [0, 0, 0], [sz, 0, 0], [0, sz, 0], [0, 0, sz],
+                [sz, sz, 0], [sz, 0, sz], [0, sz, sz], [sz, sz, sz]
+            ];
+            corners.forEach(([x, y, z]) => {
+                const dot = new THREE.Mesh(dotGeo, dotMat);
+                dot.position.set(x, y, z);
+                boxGroup.add(dot);
+            });
+        }
+
+        updateBoundingBox(DEFAULT_GRID_SIZE);
+
+        // =========================================================================
+        // Motile Meshes — InstancedMesh per status
+        // =========================================================================
+        const motileGroups = {};
+        const instancedMeshes = {};
+        const STATUS_COLORS = {
+            HEALTHY: new THREE.Color('#4ade80'),
+            INFECTED: new THREE.Color('#ef4444'),
+            RESISTANT: new THREE.Color('#60a5fa')
+        };
+        const STATUS_EMISSIVE = {
+            HEALTHY: new THREE.Color('#1a4a20'),
+            INFECTED: new THREE.Color('#440000'),
+            RESISTANT: new THREE.Color('#0a1a30')
+        };
+
+        const baseMotileGeo = new THREE.SphereGeometry(1, 24, 24);
+
+        function createMotileMesh(status) {
+            const mat = new THREE.MeshStandardMaterial({
+                color: STATUS_COLORS[status],
+                emissive: STATUS_EMISSIVE[status],
+                roughness: 0.35,
+                metalness: 0.1,
+            });
+            const mesh = new THREE.InstancedMesh(baseMotileGeo, mat, 500);
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            mesh.castShadow = false;
+            mesh.receiveShadow = false;
+            mesh.count = 0;
+            mesh.frustumCulled = true;
+            scene.add(mesh);
+            return mesh;
+        }
+
+        ['HEALTHY', 'INFECTED', 'RESISTANT'].forEach(status => {
+            const mesh = createMotileMesh(status);
+            instancedMeshes[status] = mesh;
+            motileGroups[status] = [];
+        });
+
+        // For tracking which motile is in which group
+        let motileIdMap = {}; // id → { status, energy, position }
+
+        const dummy = new THREE.Object3D();
+        const tempColor = new THREE.Color();
+
+        function updateMotileInstances() {
+            for (const [status, mesh] of Object.entries(instancedMeshes)) {
+                const motiles = motileGroups[status];
+                const count = motiles.length;
+                mesh.count = count;
+
+                if (count === 0) continue;
+
+                for (let i = 0; i < count; i++) {
+                    const m = motiles[i];
+                    const [x, y, z] = m.position;
+                    const energy = m.energy || 50;
+                    // Scale: base 0.3, up to ~0.9 for high energy
+                    const scale = 0.28 + (energy / 120) * 0.65;
+                    dummy.position.set(x, y, z);
+                    dummy.scale.setScalar(scale);
+                    dummy.rotation.set(0, 0, 0);
+                    dummy.updateMatrix();
+                    mesh.setMatrixAt(i, dummy.matrix);
+
+                    // Color tint by energy (brighter = more energy)
+                    const baseColor = STATUS_COLORS[status].clone();
+                    const energyFactor = Math.min(energy / 100, 1.0);
+                    tempColor.copy(baseColor).multiplyScalar(0.7 + energyFactor * 0.3);
+                    mesh.setColorAt(i, tempColor);
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            }
+        }
+
+        function clearAllMotiles() {
+            ['HEALTHY', 'INFECTED', 'RESISTANT'].forEach(status => {
+                motileGroups[status] = [];
+                instancedMeshes[status].count = 0;
+                instancedMeshes[status].instanceMatrix.needsUpdate = true;
+                if (instancedMeshes[status].instanceColor) instancedMeshes[status].instanceColor.needsUpdate = true;
+            });
+            motileIdMap = {};
+        }
+
+        // =========================================================================
+        // Grid Slice Visualization
+        // =========================================================================
+        const gridSliceGroup = new THREE.Group();
+        scene.add(gridSliceGroup);
+
+        let nutrientPlane = null;
+        let phageCloudPoints = null;
+
+        function clearGridSlice() {
+            while (gridSliceGroup.children.length > 0) {
+                const child = gridSliceGroup.children[0];
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(m => m.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+                gridSliceGroup.remove(child);
+            }
+            nutrientPlane = null;
+            phageCloudPoints = null;
+        }
+
+        function updateGridSlice(gridSlice, gridSize) {
+            clearGridSlice();
+            if (!gridSlice || !Array.isArray(gridSlice) || gridSlice.length < 3) return;
+
+            const sz = gridSize || DEFAULT_GRID_SIZE;
+            const nutrient = gridSlice[0];  // 2D array
+            const toxin = gridSlice[1];
+            const phage = gridSlice[2];
+
+            const rows = nutrient.length;
+            const cols = nutrient[0]?.length || rows;
+            const midY = sz / 2;
+
+            // Nutrient plane — semi-transparent colored grid
+            if (rows > 0 && cols > 0) {
+                const planeGeo = new THREE.PlaneGeometry(sz, sz, cols - 1, rows - 1);
+                // Rotate to be horizontal (XZ plane) at mid Y
+                planeGeo.rotateX(-Math.PI / 2);
+
+                const colors = new Float32Array(planeGeo.attributes.position.count * 3);
+                const vertexMap = new Map();
+
+                // Map each vertex to its grid cell
+                for (let i = 0; i < planeGeo.attributes.position.count; i++) {
+                    const x = planeGeo.attributes.position.getX(i);
+                    const z = planeGeo.attributes.position.getZ(i);
+                    const col = Math.round((x / sz) * (cols - 1));
+                    const row = Math.round((z / sz) * (rows - 1));
+                    const r = Math.min(Math.max(row, 0), rows - 1);
+                    const c = Math.min(Math.max(col, 0), cols - 1);
+                    const val = (nutrient[r] && nutrient[r][c] != null) ? nutrient[r][c] : 0;
+                    // Green tint based on nutrient concentration
+                    colors[i * 3] = 0.05 + val * 0.3;
+                    colors[i * 3 + 1] = 0.08 + val * 0.6;
+                    colors[i * 3 + 2] = 0.05 + val * 0.15;
+                }
+                planeGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+                const planeMat = new THREE.MeshBasicMaterial({
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.35,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                });
+                nutrientPlane = new THREE.Mesh(planeGeo, planeMat);
+                nutrientPlane.position.set(sz / 2, midY, sz / 2);
+                gridSliceGroup.add(nutrientPlane);
+            }
+
+            // Phage cloud — scattered points where phage density > 0
+            const phagePoints = [];
+            for (let r = 0; r < phage.length; r++) {
+                for (let c = 0; c < (phage[r]?.length || 0); c++) {
+                    const val = phage[r][c];
+                    if (val > 0.001) {
+                        const count = Math.ceil(val * 20);
+                        for (let k = 0; k < count; k++) {
+                            const x = (c / Math.max(cols - 1, 1)) * sz + (Math.random() - 0.5) * (sz / cols);
+                            const z = (r / Math.max(rows - 1, 1)) * sz + (Math.random() - 0.5) * (sz / rows);
+                            const y = midY + (Math.random() - 0.5) * 2;
+                            phagePoints.push(x, y, z);
+                        }
+                    }
+                }
+            }
+
+            if (phagePoints.length > 0) {
+                const ptsGeo = new THREE.BufferGeometry();
+                ptsGeo.setAttribute('position', new THREE.Float32BufferAttribute(phagePoints, 3));
+                const ptsMat = new THREE.PointsMaterial({
+                    color: '#ff6688',
+                    size: 0.15,
+                    transparent: true,
+                    opacity: 0.6,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false,
+                });
+                phageCloudPoints = new THREE.Points(ptsGeo, ptsMat);
+                gridSliceGroup.add(phageCloudPoints);
+            }
+        }
+
+        // =========================================================================
+        // Nutrient Fog at Top
+        // =========================================================================
+        const fogGroup = new THREE.Group();
+        scene.add(fogGroup);
+
+        function updateNutrientFog(nutrientMean, gridSize) {
+            while (fogGroup.children.length > 0) {
+                const child = fogGroup.children[0];
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+                fogGroup.remove(child);
+            }
+            if (nutrientMean == null) return;
+            const sz = gridSize || DEFAULT_GRID_SIZE;
+            const intensity = Math.min(nutrientMean * 2, 1.0);
+            if (intensity < 0.05) return;
+
+            // A few translucent planes near the top
+            for (let i = 0; i < 3; i++) {
+                const fogGeo = new THREE.PlaneGeometry(sz * 1.1, sz * 1.1);
+                fogGeo.rotateX(-Math.PI / 2);
+                const fogMat = new THREE.MeshBasicMaterial({
+                    color: '#88cc44',
+                    transparent: true,
+                    opacity: intensity * 0.06 * (3 - i),
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending,
+                });
+                const plane = new THREE.Mesh(fogGeo, fogMat);
+                plane.position.set(sz / 2, sz - 0.5 - i * 0.6, sz / 2);
+                fogGroup.add(plane);
+            }
+        }
+
+        // =========================================================================
+        // Loading & Parsing
+        // =========================================================================
+        function parseStateJSON(text, filename) {
+            try {
+                const data = JSON.parse(text);
+                // Validate
+                if (data.motiles == null || data.tick == null) {
+                    console.warn('Invalid state file:', filename, 'missing motiles or tick');
+                    return null;
+                }
+                data._filename = filename;
+                return data;
+            } catch (e) {
+                console.error('Failed to parse JSON:', filename, e);
+                return null;
+            }
+        }
+
+        function loadStates(files) {
+            const promises = Array.from(files).map(file => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const state = parseStateJSON(reader.result, file.name);
+                        if (state) resolve(state);
+                        else reject(new Error(`Invalid: ${file.name}`));
+                    };
+                    reader.onerror = () => reject(new Error(`Read error: ${file.name}`));
+                    reader.readAsText(file);
+                });
+            });
+
+            Promise.all(promises).then(newStates => {
+                if (newStates.length === 0) return;
+                // Merge with existing, deduplicate by tick
+                const stateMap = new Map();
+                for (const s of states) stateMap.set(s.tick, s);
+                for (const s of newStates) stateMap.set(s.tick, s);
+
+                // Sort by tick
+                const merged = Array.from(stateMap.values()).sort((a, b) => a.tick - b.tick);
+                states.length = 0;
+                states.push(...merged);
+
+                currentIndex = 0;
+                tlScrubber.max = Math.max(0, states.length - 1);
+                tlScrubber.value = 0;
+                updateTimelineLabel();
+                applyState(0);
+
+                hideDropZone();
+                showToast(`Loaded ${newStates.length} state file(s) — ${states.length} total`);
+
+                // Auto-detect grid size from motile positions
+                if (states.length > 0 && states[0].motiles.length > 0) {
+                    let maxCoord = 0;
+                    for (const m of states[0].motiles) {
+                        maxCoord = Math.max(maxCoord, ...m.position);
+                    }
+                    const detected = Math.ceil(maxCoord) + 2;
+                    const gridSize = Math.max(detected, 10);
+                    if (Math.abs(gridSize - currentGridSize) > 1) {
+                        updateBoundingBox(gridSize);
+                    }
+                }
+            }).catch(err => {
+                showToast(`Error loading files: ${err.message}`);
+                console.error(err);
+            });
+        }
+
+        function applyState(index) {
+            if (index < 0 || index >= states.length) return;
+            currentIndex = index;
+            const state = states[index];
+
+            // Clear previous
+            clearAllMotiles();
+
+            // Populate motile groups
+            const motiles = state.motiles || [];
+            for (const m of motiles) {
+                const status = m.status || 'HEALTHY';
+                if (!motileGroups[status]) motileGroups[status] = [];
+                motileGroups[status].push({
+                    position: m.position,
+                    energy: m.energy,
+                    id: m.id,
+                });
+                motileIdMap[m.id] = { status, energy: m.energy, position: m.position };
+            }
+
+            updateMotileInstances();
+
+            // Grid slice
+            if (state.grid_slice) {
+                updateGridSlice(state.grid_slice, currentGridSize);
+            } else {
+                clearGridSlice();
+            }
+
+            // Nutrient fog
+            const nutrientMean = state.chemistry?.nutrient_mean;
+            updateNutrientFog(nutrientMean, currentGridSize);
+
+            // Update HUD
+            updateHUD(state);
+            updateStatsPanel(state);
+            updateTimelineLabel();
+
+            tlScrubber.value = index;
+        }
+
+        // =========================================================================
+        // HUD Updates
+        // =========================================================================
+        function updateHUD(state) {
+            hudTick.textContent = state.tick != null ? `T+${state.tick}` : '—';
+            hudPop.textContent = state.population != null ? state.population : (state.motiles?.length || 0);
+
+            const stats = state.stats || {};
+            const infection = state.infection || {};
+
+            hudHealthy.textContent = infection.total_healthy ?? stats.healthy ?? 0;
+            hudInfected.textContent = infection.total_infected ?? stats.infected ?? 0;
+            hudResistant.textContent = infection.total_resistant ?? stats.resistant ?? 0;
+
+            const avgResist = stats.avg_resistance;
+            hudResist.textContent = avgResist != null ? (avgResist * 100).toFixed(1) + '%' : '—';
+
+            const avgGen = stats.avg_generation;
+            const maxGen = stats.max_generation;
+            hudGen.textContent = avgGen != null
+                ? `${avgGen.toFixed(1)} (max ${maxGen ?? '—'})`
+                : '—';
+        }
+
+        function updateStatsPanel(state) {
+            const stats = state.stats || {};
+            const chem = state.chemistry || {};
+            const infection = state.infection || {};
+
+            stAvgEnergy.textContent = stats.avg_energy != null ? stats.avg_energy.toFixed(1) : '—';
+            stAvgAge.textContent = stats.avg_age != null ? stats.avg_age.toFixed(1) : '—';
+            stMaxGen.textContent = stats.max_generation != null ? stats.max_generation : '—';
+            stAvgInf.textContent = stats.avg_infectivity != null ? (stats.avg_infectivity * 100).toFixed(1) + '%' : '—';
+            stNutrient.textContent = chem.nutrient_mean != null ? chem.nutrient_mean.toFixed(3) : '—';
+            stPhage.textContent = chem.phage_mean != null ? chem.phage_mean.toFixed(4) : '—';
+            stInfections.textContent = infection.infections_this_tick ?? '—';
+            stRecoveries.textContent = infection.recoveries_this_tick ?? '—';
+        }
+
+        function updateTimelineLabel() {
+            if (states.length === 0) {
+                tlLabel.textContent = '0 / 0';
+                return;
+            }
+            const s = states[currentIndex];
+            tlLabel.textContent = `${s?.tick ?? '?'} / ${states[states.length - 1]?.tick ?? '?'}`;
+        }
+
+        // =========================================================================
+        // Drop Zone
+        // =========================================================================
+        function hideDropZone() {
+            dropZone.classList.remove('active');
+            dropZone.classList.add('idle');
+        }
+
+        function showDropZone() {
+            dropZone.classList.remove('idle');
+            dropZone.classList.add('active');
+        }
+
+        // Toggle drop zone on click (when idle, clicking canvas shows it)
+        document.addEventListener('click', (e) => {
+            if (states.length === 0 && e.target === renderer.domElement) {
+                showDropZone();
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer?.files;
+            if (files && files.length > 0) {
+                loadStates(files);
+            }
+        });
+
+        // Also handle drops on the whole document (for when drop zone is hidden)
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (states.length > 0) {
+                dropZone.classList.add('active', 'dragover');
+            }
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer?.files;
+            if (!files || files.length === 0) return;
+
+            // Check if any file looks like a state JSON
+            const jsonFiles = Array.from(files).filter(f =>
+                f.name.endsWith('.json') || f.type === 'application/json'
+            );
+            if (jsonFiles.length > 0) {
+                loadStates(jsonFiles);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files && fileInput.files.length > 0) {
+                loadStates(fileInput.files);
+                fileInput.value = '';
+            }
+        });
+
+        // =========================================================================
+        // Timeline Controls
+        // =========================================================================
+        tlScrubber.addEventListener('input', () => {
+            const idx = parseInt(tlScrubber.value);
+            if (idx !== currentIndex) {
+                applyState(idx);
+            }
+        });
+
+        btnTlPrev.addEventListener('click', () => {
+            if (currentIndex > 0) applyState(currentIndex - 1);
+        });
+        btnTlNext.addEventListener('click', () => {
+            if (currentIndex < states.length - 1) applyState(currentIndex + 1);
+        });
+
+        // HUD play controls
+        btnPlay.addEventListener('click', togglePlay);
+        btnPrev.addEventListener('click', () => {
+            if (currentIndex > 0) applyState(currentIndex - 1);
+        });
+        btnNext.addEventListener('click', () => {
+            if (currentIndex < states.length - 1) applyState(currentIndex + 1);
+        });
+        btnSpeedDown.addEventListener('click', () => {
+            playSpeed = Math.max(0.25, playSpeed / 2);
+            updateSpeedLabel();
+        });
+        btnSpeedUp.addEventListener('click', () => {
+            playSpeed = Math.min(16, playSpeed * 2);
+            updateSpeedLabel();
+        });
+
+        function updateSpeedLabel() {
+            speedLabel.textContent = playSpeed + '×';
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            btnPlay.textContent = isPlaying ? '⏸' : '▶';
+            btnPlay.classList.toggle('active', isPlaying);
+            lastFrameTime = performance.now();
+            frameAccumulator = 0;
+        }
+
+        // Keyboard shortcuts
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            switch (e.key) {
+                case ' ':
+                    e.preventDefault();
+                    togglePlay();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (currentIndex > 0) applyState(currentIndex - 1);
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (currentIndex < states.length - 1) applyState(currentIndex + 1);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    playSpeed = Math.min(16, playSpeed * 2);
+                    updateSpeedLabel();
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    playSpeed = Math.max(0.25, playSpeed / 2);
+                    updateSpeedLabel();
+                    break;
+                case 'r':
+                    e.preventDefault();
+                    camera.position.set(28, 22, 32);
+                    controls.target.set(currentGridSize / 2, currentGridSize / 2, currentGridSize / 2);
+                    controls.update();
+                    break;
+            }
+        });
+
+        // =========================================================================
+        // Toast
+        // =========================================================================
+        let toastTimeout;
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // =========================================================================
+        // Resize
+        // =========================================================================
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        // =========================================================================
+        // Animation Loop
+        // =========================================================================
+        const clock = new THREE.Clock();
+
+        function animate(timestamp) {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.5);
+
+            controls.update();
+
+            // Timeline auto-play
+            if (isPlaying && states.length > 1) {
+                frameAccumulator += dt;
+                const interval = 1.0 / (BASE_TPS * playSpeed);
+                while (frameAccumulator >= interval) {
+                    frameAccumulator -= interval;
+                    if (currentIndex < states.length - 1) {
+                        applyState(currentIndex + 1);
+                    } else {
+                        // Loop back to start
+                        applyState(0);
+                    }
+                }
+            }
+
+            // Pulse infected motiles
+            const time = timestamp * 0.001;
+            const infectedMesh = instancedMeshes['INFECTED'];
+            if (infectedMesh && infectedMesh.count > 0) {
+                const infected = motileGroups['INFECTED'];
+                const pulse = 1.0 + Math.sin(time * 6.0) * 0.12;
+                for (let i = 0; i < infected.length; i++) {
+                    const m = infected[i];
+                    const [x, y, z] = m.position;
+                    const energy = m.energy || 50;
+                    const scale = (0.28 + (energy / 120) * 0.65) * pulse;
+                    dummy.position.set(x, y, z);
+                    dummy.scale.setScalar(scale);
+                    dummy.updateMatrix();
+                    infectedMesh.setMatrixAt(i, dummy.matrix);
+                }
+                infectedMesh.instanceMatrix.needsUpdate = true;
+            }
+
+            // Pulse infected emissive glow
+            if (infectedMesh && infectedMesh.material) {
+                const emissiveIntensity = 0.15 + Math.sin(time * 6.0) * 0.08;
+                infectedMesh.material.emissive.setRGB(
+                    0.8 + Math.sin(time * 6.0) * 0.2,
+                    0.05,
+                    0.05
+                );
+                infectedMesh.material.emissiveIntensity = emissiveIntensity;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // =========================================================================
+        // Startup — demo scene with placeholder elements
+        // =========================================================================
+        function createDemoScene() {
+            // A few sample spheres to show the scene is working
+            const demoSizes = [0.4, 0.5, 0.35, 0.55, 0.42, 0.48, 0.38, 0.52, 0.45, 0.6];
+            const demoColors = ['#4ade80', '#4ade80', '#4ade80', '#4ade80', '#4ade80',
+                '#4ade80', '#4ade80', '#4ade80', '#60a5fa', '#ef4444'];
+
+            for (let i = 0; i < 10; i++) {
+                const geo = new THREE.SphereGeometry(demoSizes[i], 20, 20);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(demoColors[i]),
+                    roughness: 0.35,
+                    metalness: 0.1,
+                    emissive: demoColors[i] === '#ef4444'
+                        ? new THREE.Color('#440000')
+                        : new THREE.Color('#112211'),
+                });
+                const sphere = new THREE.Mesh(geo, mat);
+                sphere.position.set(
+                    3 + Math.random() * 14,
+                    3 + Math.random() * 14,
+                    3 + Math.random() * 14
+                );
+                sphere.userData.isDemo = true;
+                scene.add(sphere);
+            }
+        }
+
+        createDemoScene();
+
+        // Clean up demo spheres when real data loads
+        const origApplyState = applyState;
+        applyState = function(index) {
+            // Remove demo spheres
+            const toRemove = [];
+            scene.traverse(child => {
+                if (child.userData?.isDemo) toRemove.push(child);
+            });
+            toRemove.forEach(c => {
+                if (c.geometry) c.geometry.dispose();
+                if (c.material) c.material.dispose();
+                scene.remove(c);
+            });
+            applyState = origApplyState;
+            origApplyState(index);
+        };
+
+        // Start
+        requestAnimationFrame(animate);
+        showToast('Drag & drop state JSON files to begin');
+
+        console.log('%c🧬 Motile 3D Viewer %cready',
+            'font-size:16px;color:#4ade80;', 'color:#94a3b8;');
+        console.log('  Drop state_*.json files onto the page');
+        console.log('  Space = play/pause  |  ← → = prev/next frame');
+        console.log('  ↑ ↓ = speed  |  R = reset camera');
+    </script>
+</body>
+</html>
