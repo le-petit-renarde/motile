@@ -171,10 +171,11 @@ class SimulationEngine:
         toxin : (M,) float32 ndarray
         phage : (M,) float32 ndarray
         """
-        positions = np.clip(positions, 0, self.size - 1).astype(np.intp)
-        nutrient = self.grid[self.NUTRIENT, positions[:, 0], positions[:, 1], positions[:, 2]]
-        toxin = self.grid[self.TOXIN, positions[:, 0], positions[:, 1], positions[:, 2]]
-        phage = self.grid[self.PHAGE, positions[:, 0], positions[:, 1], positions[:, 2]]
+        positions = np.maximum(0, np.minimum(self.size - 1, positions)).astype(np.intp)
+        x, y, z = positions[:, 0], positions[:, 1], positions[:, 2]
+        nutrient = self.grid[self.NUTRIENT, x, y, z]
+        toxin = self.grid[self.TOXIN, x, y, z]
+        phage = self.grid[self.PHAGE, x, y, z]
         return nutrient, toxin, phage
 
     def gradient_at(
@@ -196,13 +197,14 @@ class SimulationEngine:
         grad : (M, 3) float32 ndarray
             Gradient vectors [dx, dy, dz] at each position.
         """
-        positions = np.clip(positions, 1, self.size - 2).astype(np.intp)
+        positions = np.maximum(1, np.minimum(self.size - 2, positions)).astype(np.intp)
         field = self.grid[chem_idx]
         x, y, z = positions[:, 0], positions[:, 1], positions[:, 2]
 
-        dx = (field[x + 1, y, z] - field[x - 1, y, z]) * (0.5 / eps)
-        dy = (field[x, y + 1, z] - field[x, y - 1, z]) * (0.5 / eps)
-        dz = (field[x, y, z + 1] - field[x, y, z - 1]) * (0.5 / eps)
+        mult = 0.5 / eps
+        dx = (field[x + 1, y, z] - field[x - 1, y, z]) * mult
+        dy = (field[x, y + 1, z] - field[x, y - 1, z]) * mult
+        dz = (field[x, y, z + 1] - field[x, y, z - 1]) * mult
 
         return np.column_stack([dx, dy, dz]).astype(np.float32)
 

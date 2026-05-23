@@ -239,11 +239,7 @@ class Motile:
         np.ndarray
             Shape ``(3,)``, dtype int, values in ``[0, grid_size-1]``.
         """
-        return np.clip(
-            np.round(self.position).astype(np.int32),
-            0,
-            self.config.grid_size - 1,
-        )
+        return np.maximum(0, np.minimum(self.config.grid_size - 1, np.rint(self.position).astype(np.int32)))
 
     # ------------------------------------------------------------------
     #  Perception → action pipeline

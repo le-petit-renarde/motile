@@ -136,15 +136,16 @@ class PhageSystem:
             return self.stats, np.empty((0, 3), dtype=int), np.empty((0,), dtype=np.float32)
 
         # --- collect emissions ---------------------------------------------------
-        positions = np.array([m.grid_pos() for m in motiles], dtype=int)
+        positions_float = np.array([m.position for m in motiles])
+        positions = np.maximum(0, np.minimum(cfg.grid_size - 1, np.rint(positions_float).astype(int)))
         phage_emissions = np.array([m.emit_phage() for m in motiles], dtype=np.float32)
 
         # --- per-motile infection / recovery loop --------------------------------
         infections = 0
         recoveries = 0
 
-        for motile in motiles:
-            gp = motile.grid_pos()
+        for i, motile in enumerate(motiles):
+            gp = positions[i]
             # Sample phage in 3×3×3 neighborhood around motile
             x0, y0, z0 = max(0, gp[0]-1), max(0, gp[1]-1), max(0, gp[2]-1)
             x1, y1, z1 = min(cfg.grid_size, gp[0]+2), min(cfg.grid_size, gp[1]+2), min(cfg.grid_size, gp[2]+2)
